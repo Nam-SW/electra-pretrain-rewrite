@@ -28,7 +28,8 @@ def load(
     # =========== user define ===========
 
     def _process(batch):
-        return tokenizer(list(map(text_processing, data["abstract"])))
+        texts = sum([batch[key] for key in data.keys() if isinstance(batch[key], str)], [])
+        return tokenizer(list(map(text_processing, texts)))
 
     # Write your own mapping, shuffling, and splitting sequences.
 

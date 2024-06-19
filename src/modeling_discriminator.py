@@ -1,13 +1,16 @@
 import torch
 import torch.nn as nn
-from transformers import ElectraForMaskedLM, ElectraForTokenClassification
+from transformers import ElectraConfig, ElectraForMaskedLM, ElectraForPreTraining
 
 
-class ElectraDiscriminatorWithGenerator(ElectraForTokenClassification):
+class ElectraDiscriminatorWithGenerator(ElectraForPreTraining):
     def __init__(
-        self, generator: ElectraForMaskedLM, share_embedding_weigh: bool = True, *args, **kwags
+        self,
+        generator: ElectraForMaskedLM,
+        config: ElectraConfig,
+        share_embedding_weigh: bool = True,
     ):
-        super.__init__(*args, **kwags)
+        super.__init__(config)
 
         self.generator = generator
         # weight freeze
@@ -23,7 +26,12 @@ class ElectraDiscriminatorWithGenerator(ElectraForTokenClassification):
             for param in child.parameters():
                 param.requires_grad = False
 
-    def forward(self, input_ids, attention_mask, labels):
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor = None,
+        labels: torch.Tensor = None,
+    ):
 
         generator_hidden_states = self.generator(input_ids=input_ids, attention_mask=attention_mask)
         generator_output = torch.argmax(generator_hidden_states.logits, dim=-1)
@@ -31,7 +39,7 @@ class ElectraDiscriminatorWithGenerator(ElectraForTokenClassification):
 
         corrupted_input_ids = input_ids.clone()
         corrupted_input_ids[idx] = generator_output[idx]
-        discriminator_labels = torch.where(idx, 1, labels)
+        discriminator_labels = torch.where(idx, 1, labels.new_zeros(labels.size()))
 
         return super().__call__(
             input_ids=corrupted_input_ids,

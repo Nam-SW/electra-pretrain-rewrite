@@ -6,6 +6,7 @@ from dataloader import load
 
 # import hydra
 from hydra.experimental import compose, initialize
+from modeling_discriminator import ElectraDiscriminatorWithGenerator
 from transformers import (
     AutoTokenizer,
     DataCollatorForLanguageModeling,
@@ -25,12 +26,15 @@ def main(cfg):
 
     # tokenizer, model
     tokenizer = AutoTokenizer.from_pretrained(cfg.MODEL.tokenizer)
-    model = ElectraForMaskedLM(
-        ElectraConfig(
+    generator = ElectraForMaskedLM.from_pretrained(cfg.MODEL.generator)
+    model = ElectraDiscriminatorWithGenerator(
+        generator=generator,
+        config=ElectraConfig(
             vocab_size=tokenizer.vocab_size,
             pad_token_id=tokenizer.pad_token_id,
             **cfg.MODEL.config,
-        )
+        ),
+        share_embedding_weigh=True,
     )
 
     # dataset
@@ -52,7 +56,10 @@ def main(cfg):
     last_checkpoint = get_last_checkpoint(cfg.ARGS.training_arguments.output_dir)
     trainer.train(resume_from_checkpoint=last_checkpoint)
 
-    trainer.save_model(cfg.PATH.output_dir)
+    trainer.save_model(cfg.model.output_dir)
+    # 헤드 제거, electra 모델만 저장
+    model.electra.save_pretrained(cfg.model.output_dir + "_base")
+    tokenizer.save_pretrained(cfg.model.output_dir + "_base")
 
     if cfg.ETC.get("wandb_project"):
         wandb.finish()
@@ -60,5 +67,5 @@ def main(cfg):
 
 if __name__ == "__main__":
     with initialize(version_base="1.2", config_path="../config/"):
-        cfg = compose(config_name="generator_config")
+        cfg = compose(config_name="discriminator_config")
     main(cfg)
